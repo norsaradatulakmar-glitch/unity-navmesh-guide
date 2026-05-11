@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A Unity NavMesh Guide - Interactive Walkthrough</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+        
+        :root {
+            --moodle-blue: #0f172a;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--moodle-blue);
+            color: #f1f5f9;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Hotspot Styling - Improved Visibility */
+        .hotspot {
+            position: absolute;
+            width: 52px;
+            height: 52px;
+            background-color: #3b82f6;
+            color: white;
+            border: 4px solid white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 1.4rem;
+            cursor: pointer;
+            box-shadow: 0 0 25px rgba(59, 130, 246, 0.8), 0 0 0 4px rgba(59, 130, 246, 0.3);
+            z-index: 30;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform: translate(-50%, -50%); /* Center on coordinate */
+        }
+
+        .hotspot:hover {
+            transform: translate(-50%, -50%) scale(1.15);
+            background-color: #2563eb;
+        }
+
+        .hotspot-pulse::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: rgba(59, 130, 246, 0.5);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(2.2); opacity: 0; }
+        }
+
+        /* Modal Legibility Fix */
+        .modal-container {
+            background: rgba(2, 6, 23, 0.98); 
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+            max-width: 520px;
+            width: 90%;
+            padding: 2.5rem;
+            border-radius: 2rem;
+            pointer-events: auto;
+        }
+
+        /* Background Dimming effect */
+        #dim-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s ease;
+            z-index: 40;
+        }
+
+        #dim-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-active {
+            z-index: 50 !important;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.4s ease forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9) translateY(10px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        /* Moodle Compatibility */
+        .page-wrapper {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .infographic-box {
+            position: relative;
+            background: #000;
+            border-radius: 24px;
+            overflow: hidden;
+            border: 1px solid #1e293b;
+        }
+
+        .infographic-box img {
+            width: 100%;
+            height: auto;
+            display: block;
+            transition: filter 0.5s ease;
+        }
+
+        .dimmed img {
+            filter: brightness(0.2) blur(3px);
+        }
+    </style>
+</head>
+<body>
+
+<div class="page-wrapper">
+    <!-- Header -->
+    <header class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+        <div>
+            <h1 class="text-2xl font-extrabold text-white tracking-tight">Unity NavMesh <span class="text-blue-500">Mastery</span></h1>
+            <p class="text-slate-400 text-sm font-medium">Follow the steps to understand AI pathfinding.</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl px-6 py-3 flex items-center gap-4">
+            <div class="text-xs font-bold text-slate-500 uppercase">Progress</div>
+            <div class="w-32 h-2 bg-slate-800 rounded-full overflow-hidden">
+                <div id="progress-bar" class="h-full bg-blue-500 transition-all duration-700" style="width: 14%"></div>
+            </div>
+            <div id="step-counter" class="text-sm font-bold text-blue-400">1 / 7</div>
+        </div>
+    </header>
+
+    <!-- Main Walkthrough Area -->
+    <div id="walkthrough-container" class="infographic-box shadow-2xl">
+        <img id="main-image" src="https://iili.io/BD83fgS.png" alt="Unity NavMesh Guide" onload="onImageLoad()">
+        
+        <!-- Hotspots -->
+        <div id="hotspot-layer" class="absolute inset-0 z-30"></div>
+
+        <!-- Dimming Overlay -->
+        <div id="dim-overlay" onclick="closeModal()"></div>
+
+        <!-- Pop-up Modal -->
+        <div id="modal-layer" class="absolute inset-0 flex items-center justify-center pointer-events-none z-50">
+            <div id="info-modal" class="modal-container hidden fade-in">
+                <div class="flex justify-between items-center mb-6">
+                    <span id="modal-step-badge" class="bg-blue-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest">Step 01</span>
+                    <button onclick="closeModal()" class="text-slate-500 hover:text-white transition-colors">
+                        <i data-lucide="x-circle" class="w-6 h-6"></i>
+                    </button>
+                </div>
+                <h2 id="modal-title" class="text-3xl font-extrabold text-white mb-4 leading-tight">Step Title</h2>
+                <p id="modal-desc" class="text-slate-300 text-lg leading-relaxed mb-8">
+                    Detailed explanation goes here...
+                </p>
+                <button id="next-btn" onclick="nextStep()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 group">
+                    <span id="btn-label">Next Step</span>
+                    <i data-lucide="chevron-right" class="w-5 h-5 group-hover:translate-x-1 transition-transform"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quiz Section (Hidden initially) -->
+    <section id="quiz-section" class="hidden mt-16 bg-slate-900 border border-slate-800 rounded-[2.5rem] p-10 fade-in">
+        <div class="text-center mb-12">
+            <h2 class="text-3xl font-black text-white mb-2 uppercase tracking-tighter">Quick Check</h2>
+            <p class="text-slate-400">Let's see what you've learned about NavMesh.</p>
+        </div>
+        <div id="quiz-content" class="space-y-6 max-w-2xl mx-auto"></div>
+        
+        <div id="quiz-result" class="hidden mt-10 p-8 bg-blue-600/10 border border-blue-500/30 rounded-3xl text-center">
+            <h3 class="text-xl font-bold text-white mb-2">Quiz Finished!</h3>
+            <p id="result-text" class="text-slate-300 mb-6"></p>
+            <button onclick="resetQuiz()" class="bg-white text-slate-900 px-8 py-3 rounded-xl font-bold">Try Again</button>
+        </div>
+    </section>
+
+    <!-- Q&A Section -->
+    <section id="qa-section" class="hidden mt-16 mb-24 max-w-2xl mx-auto">
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8">
+            <h3 class="text-xl font-bold text-white mb-6 flex items-center gap-3">
+                <i data-lucide="help-circle" class="text-blue-500"></i>
+                Ask a Question [A Unity NavMesh Guide]
+            </h3>
+            <form onsubmit="handleQuestion(event)" class="space-y-4">
+                <input type="text" placeholder="Your Subject" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-5 py-3 text-white outline-none focus:border-blue-500" required>
+                <textarea placeholder="How can I...?" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-5 py-3 text-white outline-none focus:border-blue-500" rows="3" required></textarea>
+                <button type="submit" class="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-all">Submit to Instructor</button>
+            </form>
+            <div id="qa-success" class="hidden mt-4 text-green-400 text-center text-sm font-medium">Question submitted successfully!</div>
+        </div>
+    </section>
+</div>
+
+<script>
+    const steps = [
+        { id: 1, title: "Define Static Geometry", desc: "Select environmental objects like walls and floors and mark them as 'Static' in the Inspector. This is required for Unity to calculate navigation paths.", x: 8, y: 35 },
+        { id: 2, title: "Establish Physical Presence", desc: "Attach 'Colliders' to your floor and obstacles. Colliders define the physical limits, preventing your AI from walking through solid objects.", x: 18, y: 80 },
+        { id: 3, title: "Atmospheric Lighting", desc: "Use Gradient Environment Lighting to set the mood. While not functional for AI, it creates the 'look and feel' of your game world.", x: 34, y: 48 },
+        { id: 4, title: "NavMesh Settings", desc: "Adjust Agent Radius, Max Slope, and Step Height. These values tell the AI what size obstacles it can step over or how steep a ramp it can climb.", x: 55, y: 78 },
+        { id: 5, title: "Baking the NavMesh", desc: "Click 'Bake' to generate the blue overlay. This blue area represents everywhere your AI agent is allowed to move.", x: 52, y: 35 },
+        { id: 6, title: "Nav Mesh Agent Components", desc: "Attach this component to your enemies or NPCs. It allows them to use the baked NavMesh to find paths to their destination.", x: 72, y: 78 },
+        { id: 7, title: "Visual Triggers & Waypoints", desc: "Create patrol routes using Waypoints and set up line-of-sight triggers to make your AI react to the player.", x: 88, y: 38 }
+    ];
+
+    const quizData = [
+        { q: "What must you check in the Inspector to allow an object to be baked into the NavMesh?", options: ["Is Trigger", "Static", "Kinematic"], correct: 1 },
+        { q: "What color is the overlay that represents walkable space?", options: ["Red", "Green", "Blue"], correct: 2 },
+        { q: "Which setting allows an AI to step up a small curb?", options: ["Step Height", "Max Slope", "Agent Radius"], correct: 0 }
+    ];
+
+    let currentStep = 0;
+    let quizScore = 0;
+    let imageLoaded = false;
+
+    function init() {
+        lucide.createIcons();
+        // If image is already cached/loaded, render immediately
+        if (document.getElementById('main-image').complete) {
+            onImageLoad();
+        }
+    }
+
+    function onImageLoad() {
+        if (imageLoaded) return;
+        imageLoaded = true;
+        renderHotspot(currentStep);
+    }
+
+    function renderHotspot(idx) {
+        const layer = document.getElementById('hotspot-layer');
+        layer.innerHTML = '';
+        
+        const s = steps[idx];
+        const btn = document.createElement('div');
+        btn.className = 'hotspot hotspot-pulse';
+        btn.style.left = s.x + '%';
+        btn.style.top = s.y + '%';
+        btn.innerText = s.id;
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            openModal(idx);
+        };
+        layer.appendChild(btn);
+    }
+
+    function openModal(idx) {
+        const modal = document.getElementById('info-modal');
+        const overlay = document.getElementById('dim-overlay');
+        const container = document.getElementById('walkthrough-container');
+        const s = steps[idx];
+
+        document.getElementById('modal-step-badge').innerText = `Step 0${s.id}`;
+        document.getElementById('modal-title').innerText = s.title;
+        document.getElementById('modal-desc').innerText = s.desc;
+        
+        document.getElementById('btn-label').innerText = (idx === steps.length - 1) ? "Start Knowledge Quiz" : "Next Step";
+
+        modal.classList.remove('hidden');
+        overlay.classList.add('active');
+        container.classList.add('dimmed');
+    }
+
+    function closeModal() {
+        document.getElementById('info-modal').classList.add('hidden');
+        document.getElementById('dim-overlay').classList.remove('active');
+        document.getElementById('walkthrough-container').classList.remove('dimmed');
+    }
+
+    function nextStep() {
+        if (currentStep < steps.length - 1) {
+            currentStep++;
+            closeModal();
+            renderHotspot(currentStep);
+            updateProgress();
+        } else {
+            showQuiz();
+        }
+    }
+
+    function updateProgress() {
+        const perc = ((currentStep + 1) / steps.length) * 100;
+        document.getElementById('progress-bar').style.width = perc + '%';
+        document.getElementById('step-counter').innerText = `${currentStep + 1} / 7`;
+    }
+
+    function showQuiz() {
+        closeModal();
+        document.getElementById('walkthrough-container').style.display = 'none';
+        document.getElementById('quiz-section').classList.remove('hidden');
+        document.getElementById('qa-section').classList.remove('hidden');
+        renderQuiz();
+    }
+
+    function renderQuiz() {
+        const container = document.getElementById('quiz-content');
+        container.innerHTML = '';
+        quizData.forEach((item, i) => {
+            const qDiv = document.createElement('div');
+            qDiv.className = 'bg-slate-950 p-6 rounded-2xl border border-slate-800';
+            qDiv.innerHTML = `
+                <p class="font-bold text-white mb-4">${i+1}. ${item.q}</p>
+                <div class="grid grid-cols-1 gap-2">
+                    ${item.options.map((opt, optIdx) => `
+                        <button onclick="checkQuiz(${i}, ${optIdx})" id="q${i}-opt${optIdx}" class="text-left p-4 rounded-xl bg-slate-900 border border-slate-800 hover:border-blue-500 text-slate-400 font-medium transition-all">
+                            ${opt}
+                        </button>
+                    `).join('')}
+                </div>
+            `;
+            container.appendChild(qDiv);
+        });
+    }
+
+    function checkQuiz(qIdx, optIdx) {
+        const correct = quizData[qIdx].correct;
+        const btns = document.querySelectorAll(`[id^="q${qIdx}-opt"]`);
+        btns.forEach(b => b.disabled = true);
+
+        const selected = document.getElementById(`q${qIdx}-opt${optIdx}`);
+        if (optIdx === correct) {
+            selected.classList.add('bg-green-500/20', 'border-green-500', 'text-green-400');
+            quizScore++;
+        } else {
+            selected.classList.add('bg-red-500/20', 'border-red-500', 'text-red-400');
+            document.getElementById(`q${qIdx}-opt${correct}`).classList.add('bg-green-500/20', 'border-green-500', 'text-green-400');
+        }
+
+        const answered = document.querySelectorAll('button[disabled]').length / 3;
+        if (answered === quizData.length) {
+            document.getElementById('quiz-result').classList.remove('hidden');
+            document.getElementById('result-text').innerText = `You scored ${quizScore} out of ${quizData.length}!`;
+        }
+    }
+
+    function resetQuiz() {
+        quizScore = 0;
+        document.getElementById('quiz-result').classList.add('hidden');
+        renderQuiz();
+    }
+
+    function handleQuestion(e) {
+        e.preventDefault();
+        document.getElementById('qa-success').classList.remove('hidden');
+        e.target.reset();
+        setTimeout(() => document.getElementById('qa-success').classList.add('hidden'), 3000);
+    }
+
+    window.onload = init;
+</script>
+
+</body>
+</html>
