@@ -139,12 +139,17 @@
             <h1 class="text-2xl font-extrabold text-white tracking-tight">Unity NavMesh <span class="text-blue-500">Mastery</span></h1>
             <p class="text-slate-400 text-sm font-medium">Follow the steps to understand AI pathfinding.</p>
         </div>
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl px-6 py-3 flex items-center gap-4">
-            <div class="text-xs font-bold text-slate-500 uppercase">Progress</div>
-            <div class="w-32 h-2 bg-slate-800 rounded-full overflow-hidden">
-                <div id="progress-bar" class="h-full bg-blue-500 transition-all duration-700" style="width: 14%"></div>
+        <div class="flex items-center gap-4">
+             <div class="bg-slate-900 border border-slate-800 rounded-2xl px-6 py-3 flex items-center gap-4">
+                <div class="text-xs font-bold text-slate-500 uppercase">Progress</div>
+                <div class="w-32 h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <div id="progress-bar" class="h-full bg-blue-500 transition-all duration-700" style="width: 14%"></div>
+                </div>
+                <div id="step-counter" class="text-sm font-bold text-blue-400">1 / 7</div>
             </div>
-            <div id="step-counter" class="text-sm font-bold text-blue-400">1 / 7</div>
+            <button onclick="replayWalkthrough()" title="Replay Walkthrough" class="p-3 bg-slate-800 border border-slate-700 rounded-2xl text-slate-400 hover:text-white hover:bg-slate-700 transition-all">
+                <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
+            </button>
         </div>
     </header>
 
@@ -183,14 +188,19 @@
     <section id="quiz-section" class="hidden mt-16 bg-slate-900 border border-slate-800 rounded-[2.5rem] p-10 fade-in">
         <div class="text-center mb-12">
             <h2 class="text-3xl font-black text-white mb-2 uppercase tracking-tighter">Quick Check</h2>
-            <p class="text-slate-400">Let's see what you've learned about NavMesh.</p>
+            <p class="text-slate-400">Let's see what you've learned about NavMesh. Questions are randomized!</p>
         </div>
         <div id="quiz-content" class="space-y-6 max-w-2xl mx-auto"></div>
         
         <div id="quiz-result" class="hidden mt-10 p-8 bg-blue-600/10 border border-blue-500/30 rounded-3xl text-center">
             <h3 class="text-xl font-bold text-white mb-2">Quiz Finished!</h3>
             <p id="result-text" class="text-slate-300 mb-6"></p>
-            <button onclick="resetQuiz()" class="bg-white text-slate-900 px-8 py-3 rounded-xl font-bold">Try Again</button>
+            <div class="flex flex-col md:flex-row justify-center gap-4">
+                <button onclick="resetQuiz()" class="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-bold transition-all">Restart Quiz</button>
+                <button onclick="replayWalkthrough()" class="bg-slate-800 hover:bg-slate-700 text-white px-8 py-3 rounded-xl font-bold border border-slate-700 transition-all flex items-center justify-center gap-2">
+                    <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Replay Guide
+                </button>
+            </div>
         </div>
     </section>
 
@@ -222,19 +232,22 @@
         { id: 7, title: "Visual Triggers & Waypoints", desc: "Create patrol routes using Waypoints and set up line-of-sight triggers to make your AI react to the player.", x: 88, y: 38 }
     ];
 
-    const quizData = [
+    const quizPool = [
         { q: "What must you check in the Inspector to allow an object to be baked into the NavMesh?", options: ["Is Trigger", "Static", "Kinematic"], correct: 1 },
         { q: "What color is the overlay that represents walkable space?", options: ["Red", "Green", "Blue"], correct: 2 },
-        { q: "Which setting allows an AI to step up a small curb?", options: ["Step Height", "Max Slope", "Agent Radius"], correct: 0 }
+        { q: "Which setting allows an AI to step up a small curb?", options: ["Step Height", "Max Slope", "Agent Radius"], correct: 0 },
+        { q: "What component must be attached to an NPC for them to navigate the NavMesh?", options: ["RigidBody", "Nav Mesh Agent", "Box Collider"], correct: 1 },
+        { q: "What represents the physical bounds of your level in the NavMesh workflow?", options: ["Atmospheric Lighting", "Colliders", "Waypoints"], correct: 1 },
+        { q: "Why is 'Static Geometry' important for NavMesh?", options: ["It improves character textures", "It tells Unity which objects don't move during navigation baking", "It increases game frame rates"], correct: 1 }
     ];
 
     let currentStep = 0;
     let quizScore = 0;
     let imageLoaded = false;
+    let currentQuiz = [];
 
     function init() {
         lucide.createIcons();
-        // If image is already cached/loaded, render immediately
         if (document.getElementById('main-image').complete) {
             onImageLoad();
         }
@@ -273,7 +286,7 @@
         document.getElementById('modal-title').innerText = s.title;
         document.getElementById('modal-desc').innerText = s.desc;
         
-        document.getElementById('btn-label').innerText = (idx === steps.length - 1) ? "Start Knowledge Quiz" : "Next Step";
+        document.getElementById('btn-label').innerText = (idx === steps.length - 1) ? "Finalize & Start Quiz" : "Next Step";
 
         modal.classList.remove('hidden');
         overlay.classList.add('active');
@@ -303,20 +316,44 @@
         document.getElementById('step-counter').innerText = `${currentStep + 1} / 7`;
     }
 
+    function replayWalkthrough() {
+        currentStep = 0;
+        quizScore = 0;
+        updateProgress();
+        
+        // Hide quiz/QA if they are visible
+        document.getElementById('quiz-section').classList.add('hidden');
+        document.getElementById('qa-section').classList.add('hidden');
+        document.getElementById('quiz-result').classList.add('hidden');
+        
+        // Show walkthrough
+        document.getElementById('walkthrough-container').style.display = 'block';
+        document.getElementById('walkthrough-container').classList.remove('dimmed');
+        
+        closeModal();
+        renderHotspot(currentStep);
+        
+        // Scroll to top
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
     function showQuiz() {
         closeModal();
         document.getElementById('walkthrough-container').style.display = 'none';
         document.getElementById('quiz-section').classList.remove('hidden');
         document.getElementById('qa-section').classList.remove('hidden');
+        
+        // Randomize quiz
+        currentQuiz = shuffleArray([...quizPool]).slice(0, 4); // Take 4 random questions
         renderQuiz();
     }
 
     function renderQuiz() {
         const container = document.getElementById('quiz-content');
         container.innerHTML = '';
-        quizData.forEach((item, i) => {
+        currentQuiz.forEach((item, i) => {
             const qDiv = document.createElement('div');
-            qDiv.className = 'bg-slate-950 p-6 rounded-2xl border border-slate-800';
+            qDiv.className = 'bg-slate-950 p-6 rounded-2xl border border-slate-800 fade-in';
             qDiv.innerHTML = `
                 <p class="font-bold text-white mb-4">${i+1}. ${item.q}</p>
                 <div class="grid grid-cols-1 gap-2">
@@ -332,7 +369,7 @@
     }
 
     function checkQuiz(qIdx, optIdx) {
-        const correct = quizData[qIdx].correct;
+        const correct = currentQuiz[qIdx].correct;
         const btns = document.querySelectorAll(`[id^="q${qIdx}-opt"]`);
         btns.forEach(b => b.disabled = true);
 
@@ -345,17 +382,26 @@
             document.getElementById(`q${qIdx}-opt${correct}`).classList.add('bg-green-500/20', 'border-green-500', 'text-green-400');
         }
 
-        const answered = document.querySelectorAll('button[disabled]').length / 3;
-        if (answered === quizData.length) {
+        const answered = document.querySelectorAll('button[disabled]').length / currentQuiz[0].options.length;
+        if (answered === currentQuiz.length) {
             document.getElementById('quiz-result').classList.remove('hidden');
-            document.getElementById('result-text').innerText = `You scored ${quizScore} out of ${quizData.length}!`;
+            document.getElementById('result-text').innerText = `You scored ${quizScore} out of ${currentQuiz.length}!`;
+            lucide.createIcons(); // Refresh for the replay icon in results
         }
     }
 
     function resetQuiz() {
         quizScore = 0;
         document.getElementById('quiz-result').classList.add('hidden');
-        renderQuiz();
+        showQuiz(); // This shuffles again
+    }
+
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
     }
 
     function handleQuestion(e) {
